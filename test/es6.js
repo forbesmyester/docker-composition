@@ -1,5 +1,6 @@
 import {expect} from "chai";
-import {Ports, MappingSpecification} from "../es6";
+import {readConfig, Ports, MappingSpecification} from "../es6";
+import {readFile, readdir} from 'fs';
 
 describe('ports', function() {
     it('can register ports', function(done) {
@@ -22,6 +23,35 @@ describe('ports', function() {
                     });
                 });
             });
+        });
+    });
+});
+
+describe('readConfig', function() {
+    it('can read', function(done) {
+        let getStateF = function(n) { return n == "a" ? "started" : "stopped"; };
+        readConfig(readdir, readFile, getStateF, './test-data', function(err, data) {
+            expect(err).to.eql(null);
+            expect(data).to.eql(
+                {
+                    "a": {
+                        "state": "started",
+                        "compose": {"person": {"name": "bob"}},
+                        "environment": {"NODE_ENV": "production"}
+                    },
+                    "b":{
+                        "state": "stopped",
+                        "compose": {
+                            "abc": {
+                                "image": "mongo:3",
+                                "ports": ["27017:27017"]
+                            }
+                        },
+                        "environment": {"KEY": "abc", "VAL": "def"}
+                    }
+                }
+            );
+            done();
         });
     });
 });
