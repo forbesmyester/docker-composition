@@ -1,13 +1,8 @@
 import {expect} from "chai";
-import { writeComposeFile, writeEnvironemntFile, readConfig, Ports, MappingSpecification } from "../lib";
+import { writeComposeFile, writeEnvironmentFile, readConfig, Ports, MappingSpecification } from "../lib";
 import {readFile, readdir} from 'fs';
 import { last, reverse, tail } from 'ramda';
 
-// import getTLIdEncoderDecoder from 'get_tlid_encoder_decoder';
-// var encoderDecoder = getTLIdEncoderDecoder(
-//     new Date(2015, 8, 1).getTime(),
-//     4
-// );
 
 
 describe('ports', function() {
@@ -52,7 +47,7 @@ describe('atomically write config files for', function() {
         let writeFile = checkerNext(
             '/tmp/aaa',
             "mongo:\n  image: 'mongo:3'\n",
-            { mode: 0x600, encoding: 'utf8' }
+            { mode: 0o600, encoding: 'utf8' }
         );
 
         let moveFile = checkerNext('/tmp/aaa', '/tmp/a.compose.yaml');
@@ -76,12 +71,12 @@ describe('atomically write config files for', function() {
         let writeFile = checkerNext(
             '/tmp/aaa',
             "NODE_ENV=production",
-            { mode: 0x600, encoding: 'utf8' }
+            { mode: 0o600, encoding: 'utf8' }
         );
 
         let moveFile = checkerNext('/tmp/aaa', '/tmp/a.environment.env');
 
-        writeEnvironemntFile(
+        writeEnvironmentFile(
             genRand,
             writeFile,
             moveFile,

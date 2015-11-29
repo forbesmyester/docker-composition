@@ -49,7 +49,7 @@ function writeConfigFile(genRand, writeFile, moveFile, mapper, extension, direct
     let tmpFile = path.join(directory, genRand());
 
     let writer = (next) => {
-        writeFile(tmpFile, mapper(data), {encoding: 'utf8', mode: 0x600}, next);
+        writeFile(tmpFile, mapper(data), {encoding: 'utf8', mode: 0o600}, next);
     };
 
     let mover = (next) => {
@@ -83,7 +83,7 @@ export function writeComposeFile(genRand, writeFile, moveFile, directory, compos
 
 }
 
-export function writeEnvironemntFile(genRand, writeFile, moveFile, directory, composition, data, next) {
+export function writeEnvironmentFile(genRand, writeFile, moveFile, directory, composition, data, next) {
 
     let mapper = function(ob) {
         return join("\n", values(mapObjIndexed((v, k) => {
