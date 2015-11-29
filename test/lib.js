@@ -1,5 +1,5 @@
 import {expect} from "chai";
-import { writeComposeFile, writeEnvironemntFile, readConfig, Ports, MappingSpecification } from "../es6";
+import { writeComposeFile, writeEnvironemntFile, readConfig, Ports, MappingSpecification } from "../lib";
 import {readFile, readdir} from 'fs';
 import { last, reverse, tail } from 'ramda';
 

@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "description": "",
   "scripts": {
-    "test": "node_modules/.bin/eslint test/*.js es6.js && node_modules/.bin/mocha --compilers js:babel/register test && node_modules/.bin/babel es6.js > index.js"
+    "test": "node_modules/.bin/eslint test/*.js lib.js && node_modules/.bin/mocha --compilers js:babel/register test"
   },
   "author": "github@speechmarks.com",
   "license": "MIT",
