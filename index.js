@@ -8,6 +8,8 @@ var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = 
 
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
+exports.writeComposeFile = writeComposeFile;
+exports.writeEnvironemntFile = writeEnvironemntFile;
 exports.readConfig = readConfig;
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
@@ -89,12 +91,60 @@ var Ports = (function () {
 
 exports.Ports = Ports;
 
+function writeConfigFile(genRand, writeFile, moveFile, mapper, extension, directory, composition, data, fNext) {
+
+    var tmpFile = _path2['default'].join(directory, genRand());
+
+    var writer = function writer(next) {
+        writeFile(tmpFile, mapper(data), { encoding: 'utf8', mode: 0x600 }, next);
+    };
+
+    var mover = function mover(next) {
+        moveFile(tmpFile, _path2['default'].join(directory, composition) + '.' + extension, next);
+    };
+
+    _async2['default'].waterfall([writer, mover], fNext);
+}
+
+function writeComposeFile(genRand, writeFile, moveFile, directory, composition, data, next) {
+
+    var mapper = function mapper(ob) {
+        return _jsYaml2['default'].safeDump(ob);
+    };
+
+    writeConfigFile(genRand, writeFile, moveFile, mapper, 'compose.yaml', directory, composition, data, next);
+}
+
+function writeEnvironemntFile(genRand, writeFile, moveFile, directory, composition, data, next) {
+
+    var mapper = function mapper(ob) {
+        return (0, _ramda.join)("\n", (0, _ramda.values)((0, _ramda.mapObjIndexed)(function (v, k) {
+            return k + '=' + v;
+        }, ob)));
+    };
+
+    writeConfigFile(genRand, writeFile, moveFile, mapper, 'environment.env', directory, composition, data, next);
+}
+
 function processFile(readFileF, filename, next) {
-    f = JSON.parse;
-    if (filename.match(/ya{0,1}ml$/)) {
-        var f = _jsYaml2['default'].safeLoad;
-    }
     try {
+        var f = function f(str) {
+            var lineProcess = function lineProcess(acc, s) {
+                if (!s) {
+                    return acc;
+                }
+                var ss = (0, _ramda.split)("=", s);
+                if ((0, _ramda.nth)(0, ss) == '') {
+                    return acc;
+                }
+                acc[(0, _ramda.nth)(0, ss)] = (0, _ramda.join)("=", (0, _ramda.tail)(ss));
+                return acc;
+            };
+            return (0, _ramda.reduce)(lineProcess, {}, (0, _ramda.split)("\n", str));
+        };
+        if (filename.match(/ya{0,1}ml$/)) {
+            f = _jsYaml2['default'].safeLoad;
+        }
         readFileF(filename, { encoding: 'utf8' }, function (err, data) {
             if (err) {
                 return next(err);

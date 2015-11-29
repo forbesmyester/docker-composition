@@ -2,7 +2,7 @@ import assert from 'assert';
 import async from 'async';
 import yaml from 'js-yaml';
 import path from 'path';
-import { merge, mapObjIndexed, zip, assocPath, nth, reverse, reduce } from 'ramda';
+import { values, nth, split, join, tail, merge, mapObjIndexed, zip, assocPath, reverse, reduce } from 'ramda';
 
 export class MappingSpecification {
     constructor(composeFile, service, port) {
@@ -44,12 +44,84 @@ export class Ports {
     }
 }
 
+function writeConfigFile(genRand, writeFile, moveFile, mapper, extension, directory, composition, data, fNext) {
+
+    let tmpFile = path.join(directory, genRand());
+
+    let writer = (next) => {
+        writeFile(tmpFile, mapper(data), {encoding: 'utf8', mode: 0x600}, next);
+    };
+
+    let mover = (next) => {
+        moveFile(
+            tmpFile,
+            path.join(directory, composition) + '.' + extension,
+            next
+        );
+    };
+
+    async.waterfall([writer, mover], fNext);
+}
+
+export function writeComposeFile(genRand, writeFile, moveFile, directory, composition, data, next) {
+
+    let mapper = function(ob) {
+        return yaml.safeDump(ob);
+    };
+
+    writeConfigFile(
+        genRand,
+        writeFile,
+        moveFile,
+        mapper,
+        'compose.yaml',
+        directory,
+        composition,
+        data,
+        next
+    );
+
+}
+
+export function writeEnvironemntFile(genRand, writeFile, moveFile, directory, composition, data, next) {
+
+    let mapper = function(ob) {
+        return join("\n", values(mapObjIndexed((v, k) => {
+            return k + '=' + v;
+        }, ob)));
+    };
+
+    writeConfigFile(
+        genRand,
+        writeFile,
+        moveFile,
+        mapper,
+        'environment.env',
+        directory,
+        composition,
+        data,
+        next
+    );
+
+}
+
 function processFile(readFileF, filename, next) {
-    f = JSON.parse;
-    if (filename.match(/ya{0,1}ml$/)) {
-        var f = yaml.safeLoad;
-    }
     try {
+        var f = function(str) {
+            let lineProcess = (acc, s) => {
+                if (!s) { return acc; }
+                let ss = split("=", s);
+                if (nth(0, ss) == '') {
+                    return acc;
+                }
+                acc[nth(0, ss)] = join("=", tail(ss));
+                return acc;
+            };
+            return (reduce(lineProcess, {}, split("\n", str)));
+        };
+        if (filename.match(/ya{0,1}ml$/)) {
+            f = yaml.safeLoad;
+        }
         readFileF(filename, {encoding: 'utf8'}, (err, data) => {
             if (err) { return next(err); }
             next(null, f(data));
