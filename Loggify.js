@@ -29,15 +29,19 @@ export default class LoggifyTransform extends Transform {
 
         var inLines = (this._existing + chunk).split("\n"),
             i = 0;
-        while (i++ < inLines.length - 1) {
-            this.push(this.represent(inLines[0]));
+        while (i < inLines.length - 1) {
+            this.push(this.represent(inLines[i]));
+            i++;
         }
         this._existing = inLines[inLines.length - 1];
         done();
     }
 
     _flush(done) {
-        this.push(this.represent(this._existing));
+        if (this._existing) {
+            this.push(this.represent(this._existing));
+            this._existing = false;
+        }
         done();
     }
 

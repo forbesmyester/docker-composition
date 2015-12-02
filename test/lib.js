@@ -1,32 +1,25 @@
 import {expect} from "chai";
-import { writeComposeFile, writeEnvironmentFile, readConfig, Ports, MappingSpecification } from "../lib";
+import { validateConfig, getHostPorts, writeComposeFile, writeEnvironmentFile, readConfig, Ports } from "../lib";
 import {readFile, readdir} from 'fs';
 import { last, reverse, tail } from 'ramda';
 
 
 
 describe('ports', function() {
-    it('can register ports', function(done) {
-        let ports = new Ports();
-        let mappings = [
-            new MappingSpecification('a/b', 'c', 80),
-            new MappingSpecification('d/e', 'c', 80)
-        ];
-        ports.register(mappings[0], (err, result) => {
-            expect(err).to.eql(null);
-            expect(result.equals(mappings[0])).to.eql(true);
-            ports.register(mappings[1], (err2, result2) => {
-                expect(err2).to.eql(null);
-                expect(result2.equals(mappings[0])).to.eql(true);
-                ports.unregister(mappings[0], (err3) => {
-                    expect(err3).to.eql(null);
-                    ports.register(mappings[1], (err4, result4) => {
-                        expect(result4.equals(mappings[0])).to.eql(true);
-                        done();
-                    });
-                });
-            });
+    it('can get ports bound to the host within a docker-compose', function(done) {
+        let getStateF = function(n) { return n == "a" ? "started" : "stopped"; };
+        readConfig(readdir, readFile, getStateF, './test-data', function(err, data) {
+            expect(getHostPorts(data.b.compose)).to.eql([27017, 8080, 3900]);
+            done();
         });
+    });
+
+    it('can register ports', function() {
+        let ports = new Ports();
+        expect(ports.register('a', [80, 81])).to.eql(['a']);
+        expect(ports.register('b', [80])).to.eql(['a']);
+        ports.unregister('a');
+        expect(ports.register('b', [80])).to.eql(['b']);
     });
 });
 
@@ -45,12 +38,12 @@ describe('atomically write config files for', function() {
     it('compose', function(done) {
 
         let writeFile = checkerNext(
-            '/tmp/aaa',
+            '/tmp/.aaa',
             "mongo:\n  image: 'mongo:3'\n",
             { mode: 0o600, encoding: 'utf8' }
         );
 
-        let moveFile = checkerNext('/tmp/aaa', '/tmp/a.compose.yaml');
+        let moveFile = checkerNext('/tmp/.aaa', '/tmp/a/compose.yaml');
 
         writeComposeFile(
             genRand,
@@ -69,12 +62,12 @@ describe('atomically write config files for', function() {
     it('environment', function(done) {
 
         let writeFile = checkerNext(
-            '/tmp/aaa',
+            '/tmp/.aaa',
             "NODE_ENV=production",
             { mode: 0o600, encoding: 'utf8' }
         );
 
-        let moveFile = checkerNext('/tmp/aaa', '/tmp/a.environment.env');
+        let moveFile = checkerNext('/tmp/.aaa', '/tmp/a/environment.env');
 
         writeEnvironmentFile(
             genRand,
@@ -88,6 +81,42 @@ describe('atomically write config files for', function() {
                 done();
             }
         );
+    });
+});
+
+describe('validateConfig', function() {
+    it('can validate (success)', function(done) {
+        let rd = (p, n) => {
+            expect(p).to.eql('test-data/m');
+            n(null, ['compose.yaml', 'environment.env']);
+        };
+        validateConfig(rd, './test-data', 'm', function(err, valid) {
+            expect(err).to.eql(null);
+            expect(valid).to.eql(true);
+            done();
+        });
+    });
+    it('can validate (missing compose)', function(done) {
+        let rd = (p, n) => {
+            expect(p).to.eql('test-data/m');
+            n(null, ['environment.env']);
+        };
+        validateConfig(rd, './test-data', 'm', function(err, valid) {
+            expect(err).to.eql(null);
+            expect(valid).to.eql(false);
+            done();
+        });
+    });
+    it('can validate (missing env)', function(done) {
+        let rd = (p, n) => {
+            expect(p).to.eql('test-data/m');
+            n(null, ['compose.yaml']);
+        };
+        validateConfig(rd, './test-data', 'm', function(err, valid) {
+            expect(err).to.eql(null);
+            expect(valid).to.eql(false);
+            done();
+        });
     });
 });
 
@@ -108,7 +137,11 @@ describe('readConfig', function() {
                         "compose": {
                             "abc": {
                                 "image": "mongo:3",
-                                "ports": ["27017:27017"]
+                                "ports": ["27017:27017", "8080:8081", "2800", 2801]
+                            },
+                            "def": {
+                                "image": "elasticsearch",
+                                "ports": ["3900:2900"]
                             }
                         },
                         "environment": {"KEY1": "abc=def", "KEY2": "def"}

@@ -1,0 +1,11 @@
+abc:
+  image: mongo:3
+  ports:
+    - 27017:27017
+    - 8080:8081
+    - "2800"
+    - 2801
+def:
+  image: elasticsearch
+  ports:
+    - "3900:2900"

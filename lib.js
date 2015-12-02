@@ -1,52 +1,36 @@
-import assert from 'assert';
 import async from 'async';
 import yaml from 'js-yaml';
 import path from 'path';
-import { values, nth, split, join, tail, merge, mapObjIndexed, zip, assocPath, reverse, reduce } from 'ramda';
-
-export class MappingSpecification {
-    constructor(composeFile, service, port) {
-        this.composeFile = composeFile;
-        this.service = service;
-        this.port = port;
-    }
-
-    equals(mappingSpecification) {
-        return (
-            (this.composeFile == mappingSpecification.composeFile) &&
-            (this.service == mappingSpecification.service) &&
-            (this.port == mappingSpecification.port)
-        );
-    }
-}
+import { flatten, uniq, map, pipe, concat, defaultTo, values, nth, split, join, tail, merge, mapObjIndexed, zip, assocPath, reduce } from 'ramda';
 
 export class Ports {
     constructor() {
         this.mappings = [];
     }
-    unregister(mappingSpecification, next) {
-        assert(mappingSpecification instanceof MappingSpecification);
-        this.mappings = this.mappings.filter((mapping) => {
-            return mappingSpecification.port = mapping.port;
+    unregister(service) {
+        this.mappings = this.mappings.filter(([s]) => {
+            if (service == s) { return false; }
+            return true;
         });
-        next(null);
     }
-    register(mappingSpecification, next) {
-        assert(mappingSpecification instanceof MappingSpecification);
-        let already = this.mappings.filter((mapping) => {
-            return mappingSpecification.port = mapping.port;
+    register(serviceName, ports) {
+        let already = this.mappings.filter(([, port]) => {
+            return ports.indexOf(port) > -1;
         });
         if (already.length) {
-            return next(null, already[0]);
+            return uniq(map(nth(0), already));
         }
-        this.mappings.push(mappingSpecification);
-        next(null, mappingSpecification);
+        this.mappings = concat(
+            this.mappings,
+            map((p) => [serviceName, p], ports)
+        );
+        return [serviceName];
     }
 }
 
 function writeConfigFile(genRand, writeFile, moveFile, mapper, extension, directory, composition, data, fNext) {
 
-    let tmpFile = path.join(directory, genRand());
+    let tmpFile = path.join(directory, "." + genRand());
 
     let writer = (next) => {
         writeFile(tmpFile, mapper(data), {encoding: 'utf8', mode: 0o600}, next);
@@ -55,7 +39,7 @@ function writeConfigFile(genRand, writeFile, moveFile, mapper, extension, direct
     let mover = (next) => {
         moveFile(
             tmpFile,
-            path.join(directory, composition) + '.' + extension,
+            path.join(directory, composition, extension),
             next
         );
     };
@@ -135,8 +119,8 @@ function reduceConfig(filesDataList) {
     let reducer = (acc, [filename, data]) => {
         return assocPath(
             [
-                filename.replace(/\.[^\.]+\.[^\.]+$/, ''),
-                nth(1, reverse(filename.split(".")))
+                filename.replace(/\/.*/, ''),
+                filename.replace(/.*\//, '').replace(/\.[^\.]+/, '')
             ],
             data,
             acc
@@ -154,13 +138,71 @@ function mixinStarted(getStateF, readConfigReturn) {
     );
 }
 
+function getHostPortsForContainer(containerCompose) {
+    return reduce(
+        (acc, dockerPort) => {
+            if (typeof dockerPort == 'number') { return acc; }
+            if (typeof dockerPort != 'string') { return acc; }
+            if (dockerPort.indexOf(":") == -1) { return acc; }
+            return concat(acc, [parseInt(nth(0, split(":", dockerPort)))]);
+        },
+        [],
+        defaultTo([], containerCompose.ports)
+    );
+}
+
+export function getHostPorts(aComposeFile) {
+
+    return pipe(
+        mapObjIndexed((v) => {
+            return getHostPortsForContainer(v);
+        }),
+        values,
+        reduce((acc, lst) => {
+            return concat(acc, lst);
+        }, [])
+    )(aComposeFile);
+
+}
+
+function semiRecursiveReadDirF(readdirF, directory, next) {
+    readdirF(directory, function(err, dirs) {
+        if (err) { return next(err); }
+        async.map(
+            map((s) => { return directory + '/' + s; }, dirs),
+            readdirF,
+            function(err2, files) {
+                if (err2) { return next(err2); }
+
+                let dirFiles = map(([d, fs]) => {
+                    return map((f) => path.join(d, f), fs);
+                }, zip(dirs, files));
+
+                next(null, flatten(dirFiles));
+            }
+        );
+    });
+}
+
+export function validateConfig(readdirF, directory, configKey, next) {
+    readdirF(path.join(directory, configKey), function(err, files) {
+        if (err) { return next(null, false); }
+        next(
+            null,
+            (files.indexOf('compose.yaml') > -1) && (files.indexOf('environment.env') > -1)
+        );
+    });
+}
+
 export function readConfig(readdirF, readFileF, getStateF, directory, next) {
-    readdirF(directory, function(err, files) {
+    semiRecursiveReadDirF(readdirF, directory, function(err, files) {
+        if (err) { return next(err); }
         async.parallel(
-            files.map(
+            map(
                 function(file) {
                     return processFile.bind(null, readFileF, path.join(directory, file));
-                }
+                },
+                files
             ),
             function(err2, datas) {
                 if (err2) { return next(err2); }
