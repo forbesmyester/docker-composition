@@ -1,7 +1,8 @@
 import Hapi from 'hapi';
 import { mkdir, readdir, readFile, writeFile, rename } from 'fs';
+import async from 'async';
 import path from 'path';
-import { once } from 'ramda';
+import { pipe, map, nth, uniq, concat, filter, once } from 'ramda';
 import getTLIdEncoderDecoder from 'get_tlid_encoder_decoder';
 
 import { Ports, getHostPorts, validateConfig, writeEnvironmentFile, writeComposeFile, readConfig } from './lib';
@@ -20,6 +21,31 @@ if (!CONFIG_DIR) {
     console.log("Need to specify CONFIG_DIR environmental variable");
     process.exit(1);
 }
+
+let respawning = [];
+function addToRespawning(compositionKey) {
+    respawning = uniq(concat(respawning, [compositionKey]));
+}
+function removeFromRespawning(compositionKey) {
+    respawning = filter(
+        (ck) => ck != compositionKey,
+        respawning
+    );
+}
+
+let boundReadConfig = readConfig.bind(
+        this,
+        readdir,
+        readFile,
+        (ck) => {
+            let r =  multiRunner.isRunning(ck) ? 'started' : 'stopped';
+            if (respawning.indexOf(ck) > -1) {
+                r = 'respawning (' + r + ')';
+            }
+            return r;
+        },
+        CONFIG_DIR
+    );
 
 let multiRunner = new MultiRunner(
     (ck) => { return [
@@ -40,7 +66,7 @@ let multiRunner = new MultiRunner(
             );
         },
     new Ports(),
-    readConfig.bind(this, readdir, readFile, () => 'stopped', CONFIG_DIR)
+    boundReadConfig
 );
 
 let genRand = (function() {
@@ -50,6 +76,47 @@ let genRand = (function() {
     );
     return () => encoderDecoder.encode();
 }());
+
+function moveToSubDir(from, fullPath, next) {
+    mkdir(path.dirname(fullPath), function() {
+        rename(from, fullPath, next);
+    });
+}
+
+
+function shouldIStartRespawner(ck, next) {
+
+    let wantsStarting = () => {
+        return ((respawning.indexOf(ck) > -1) && (!multiRunner.isRunning(ck)));
+    };
+
+    setTimeout(() => {
+        if (!wantsStarting()) {
+            return next(null, [ck, false]);
+        }
+        setTimeout(() => {
+            if (!wantsStarting) {
+                return next(null, [ck, false]);
+            }
+            return next(null, [ck, true]);
+        }, 2000);
+    }, 5000);
+
+}
+
+setInterval(() => {
+    async.map(
+        respawning,
+        shouldIStartRespawner,
+        (err, possibleRespawners) => {
+            pipe(
+                filter(([, start]) => start),
+                map(nth(0)),
+                map((ck) => multiRunner.start(ck, () => {}))
+            )(possibleRespawners);
+        }
+    );
+}, 10000);
 
 let server = new Hapi.Server();
 server.connection({ port: PORT });
@@ -63,12 +130,6 @@ server.route({
         response.code(201);
     }
 });
-
-function moveToSubDir(from, fullPath, next) {
-    mkdir(path.dirname(fullPath), function() {
-        rename(from, fullPath, next);
-    });
-}
 
 let setupComposeEnvironmentRoute = (leaf, func) => {
     server.route({
@@ -99,56 +160,121 @@ server.route({
     method: 'GET',
     path: '/composition',
     handler: (req, rep) => {
-        readConfig(
-            readdir,
-            readFile,
-            () => { return 'stopped'; },
-            CONFIG_DIR,
+        boundReadConfig(
             (err, config) => {
                 rep(err, config);
             }
         );
-
     }
 });
+
+function getStartStopRespawnErrorFunc(done) {
+    return function(err, code, message) {
+        let httpStatus = 500;
+        if (code == "INVALID_COMPOSITION_CONFIGURATION") {
+            httpStatus = 409;
+        }
+        done(httpStatus, code, message);
+    };
+}
+
+function getStartStopRespawnDoneBaseFunc(rep) {
+    return function(httpStatus, code, message) {
+        let replyData = { code };
+        if (message) { replyData.message = message; }
+        var response = rep(replyData);
+        response.code(httpStatus);
+    };
+}
+
+function startComposition(composition, rep) {
+
+    let done = once(getStartStopRespawnDoneBaseFunc(rep)),
+        error = getStartStopRespawnErrorFunc(done);
+
+    validateConfig(readdir, CONFIG_DIR, composition, (err, configOk) => {
+        if (err) {
+            return error(err, "UNKNOWN_ERROR");
+        }
+        if (!configOk) {
+            return error(
+                err,
+                "INVALID_COMPOSITION_CONFIGURATION",
+                "configuration for '" + composition + "' " +
+                    "is currently invalid."
+            );
+        }
+
+        multiRunner.start(composition, (err2, code) => {
+            if (err2) {
+                return error(err2, "UNKNOWN_ERROR");
+            }
+            done(200, code);
+        });
+        setTimeout(() => { done(202, "STARTING"); }, 500);
+    });
+}
+
+function stopComposition(composition, rep) {
+
+    let done = once(getStartStopRespawnDoneBaseFunc(rep)),
+        error = getStartStopRespawnErrorFunc(done);
+
+    multiRunner.stop(composition, (err, code) => {
+        if (err) {
+            return error(err, "UNKNOWN_ERROR");
+        }
+        done(200, code);
+    });
+    setTimeout(() => { done(202, "STOPPING"); }, 500);
+
+}
+
+function respawnComposition(composition, rep) {
+
+    let done = once(getStartStopRespawnDoneBaseFunc(rep)),
+        error = getStartStopRespawnErrorFunc(done);
+
+    validateConfig(readdir, CONFIG_DIR, composition, (err, configOk) => {
+        if (err) {
+            return error(err, "UNKNOWN_ERROR");
+        }
+        if (!configOk) {
+            return error(
+                err,
+                "INVALID_COMPOSITION_CONFIGURATION",
+                "configuration for '" + composition + "' " +
+                    "is currently invalid."
+            );
+        }
+
+        addToRespawning(composition);
+
+        done(202, 'RESPAWNING');
+    });
+}
 
 server.route({
     method: 'PUT',
-    path: '/composition/{composition}/state/start',
+    path: '/composition/{composition}/state',
     handler: (req, rep) => {
-
-        let done = once(function(httpStatus, message) {
-            var response = rep({ message: message });
-            response.code(httpStatus);
-        });
-
-        let error = function(err, message) {
-            let httpStatus = 500;
-            if (err == "INVALID_COMPOSITION_CONFIGURATION") {
-                httpStatus = 409;
-            }
-            done(httpStatus, message);
-        };
-
-        validateConfig(readdir, CONFIG_DIR, req.params.composition, (err, configOk) => {
-            if (!configOk) {
-                return error(
-                    "INVALID_COMPOSITION_CONFIGURATION",
-                    "configuration for '" + req.params.composition + "' " +
-                        "is currently invalid."
-                );
-            }
-            multiRunner.start(req.params.composition, (err2, message) => {
-                if (err2) {
-                    return error("UNKNOWN_ERROR", message);
-                }
-                done(200, message);
-            });
-            setTimeout(() => { done(200, "RUNNING"); }, 500);
-        });
+        switch (req.payload) {
+            case 'started':
+                removeFromRespawning(req.params.composition);
+                startComposition(req.params.composition, rep);
+                break;
+            case 'stopped':
+                removeFromRespawning(req.params.composition);
+                stopComposition(req.params.composition, rep);
+                break;
+            case 'respawning':
+                respawnComposition(req.params.composition, rep);
+                break;
+            default:
+                getStartStopRespawnDoneBaseFunc(rep)(409, 'INVALID_STATE');
+        }
     }
 });
-
 
 server.start((err) => {
     if (err) { throw err; }

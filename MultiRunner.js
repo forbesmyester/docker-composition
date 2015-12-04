@@ -31,17 +31,32 @@ export default class MultiRunner {
             ) {
                 return onStop(null, 'CANNOT_MAP_PORTS');
             }
-            this._mps[configKey] = this._getManageProcessInstance(configKey);
+            this._mps[configKey] = {
+                mp: this._getManageProcessInstance(configKey),
+                onStop: onStop
+            };
             let [cmd, args] = this._getCommand(configKey);
-            this._mps[configKey].start(cmd, args, (err2, code) => {
+            this._mps[configKey].mp.start(cmd, args, (err2, code) => {
+                this._mps[configKey].onStop(err2, 'EXITED_WITH_CODE ' + code);
                 delete this._mps[configKey];
-                onStop(err2, 'EXITED_WITH_CODE ' + code);
             });
         });
     }
 
-    stop(configKey) {
-        this._mps[configKey].stop();
+    isRunning(configKey) {
+        return this._mps.hasOwnProperty(configKey);
+    }
+
+    stop(configKey, onStop) {
+        if (!this._mps.hasOwnProperty(configKey)) {
+            return onStop(null, 'ALREADY_STOPPED');
+        }
+        var s = this._mps[configKey].onStop;
+        this._mps[configKey].onStop = function(err, code) {
+            s(err, code);
+            onStop(err, code);
+        };
+        this._mps[configKey].mp.stop();
     }
 
 }

@@ -20,7 +20,7 @@ export default class ManageProcess extends EventEmitter {
 
         if (!this._child) { return; }
 
-        let arg = 'SIGHUP';
+        let arg = 'SIGINT';
         if (force) {
             arg = 'SIGKILL';
         }
@@ -32,7 +32,6 @@ export default class ManageProcess extends EventEmitter {
         if (this._child) {
             return onStop(new Error('ALREADY_RUNNING'));
         }
-        console.log("CMD: ", [cmd, args]);
         this._child = spawn(cmd, args);
         this._child.stdout.pipe(this._lOut).pipe(this._mainStdout);
         this._child.stderr.pipe(this._lErr).pipe(this._mainStderr);
