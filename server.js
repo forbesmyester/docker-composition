@@ -4,6 +4,7 @@ import async from 'async';
 import path from 'path';
 import { pipe, map, nth, uniq, concat, filter, once } from 'ramda';
 import getTLIdEncoderDecoder from 'get_tlid_encoder_decoder';
+import inert from 'inert';
 
 import { Ports, getHostPorts, validateConfig, writeEnvironmentFile, writeComposeFile, readConfig } from './lib';
 import ManageProcess from './ManageProcess';
@@ -120,6 +121,7 @@ setInterval(() => {
 
 let server = new Hapi.Server();
 server.connection({ port: PORT });
+server.register(inert, function (err) { if (err) { throw err; } });
 
 server.route({
     method: 'POST',
@@ -272,6 +274,18 @@ server.route({
                 break;
             default:
                 getStartStopRespawnDoneBaseFunc(rep)(409, 'INVALID_STATE');
+        }
+    }
+});
+
+server.route({
+    method: 'GET',
+    path: '/{param*}',
+    handler: {
+        directory: {
+            path: './public',
+            redirectToSlash: true,
+            index: true
         }
     }
 });

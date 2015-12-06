@@ -1,0 +1,18 @@
+{
+  "name": "docker-composition-runner",
+  "description": "",
+  "main": "",
+  "authors": [
+    "github@speechmarks.com"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/forbesmyester/docker-composition",
+  "moduleType": [],
+  "private": true,
+  "dependencies": {
+    "components-font-awesome": "~4.5.0",
+    "js-yaml": "~3.4.6",
+    "pure": "~0.6.0",
+    "normalize-css": "normalize.css#~3.0.3"
+  }
+}
