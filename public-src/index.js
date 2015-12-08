@@ -1,6 +1,10 @@
+import {} from 'babel-polyfill';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { values, mapObjIndexed } from 'ramda';
+import { createHistory } from 'history';
+
+
 
 var Timer = React.createClass({
     getInitialState: function() {
@@ -36,7 +40,7 @@ var CompositionList = React.createClass({
 var Composition = React.createClass({
     render: function() {
 
-        function getIcon(status) {
+        function getIcon(state) {
 
             let icon = 'refresh',
                 color = 'started',
@@ -45,20 +49,20 @@ var Composition = React.createClass({
                     stopped: 'stop'
                 };
 
-            if (status.indexOf("(") == -1) {
-                icon = iconmap[status];
+            if (state.indexOf("(") == -1) {
+                icon = iconmap[state];
             }
-            if (status.indexOf('stopped') > -1) {
+            if (state.indexOf('stopped') > -1) {
                 color = 'stopped';
             }
 
             return [color, 'fa', 'fa-' + icon].join(' ');
         }
 
-        function getStatusWord(status) { return status; }
+        function getStatusWord(state) { return state; }
 
-        var status = getIcon(this.props.composition.status),
-            statusWord = getStatusWord(this.props.composition.statusWord),
+        var state = getIcon(this.props.composition.state),
+            stateWord = getStatusWord(this.props.composition.stateWord),
             name = this.props.name,
             items = this.props.composition.items;
 
@@ -70,7 +74,7 @@ var Composition = React.createClass({
             <div className="selected composition pure-g">
                 <div className="pure-u-1">
                 <h3>
-                    <i className={ status } aria-label={ statusWord }></i>&nbsp;
+                    <i className={ state } aria-label={ stateWord }></i>&nbsp;
                     { name }
                 </h3>
                 <ul>
@@ -84,22 +88,85 @@ var Composition = React.createClass({
 
 var compositionList = {
     db: {
-        status: "respawning (started)",
+        state: "respawning (started)",
         items: ["mongos", "mongodb"]
     },
     nginx: {
-        status: "started",
+        state: "started",
         items: ["qsmtpd", "imapd"]
     },
     m: {
-        status: "stopped",
+        state: "stopped",
         items: ["qsmtpd", "imapd"]
     }
 };
 
-ReactDOM.render(
-  <Timer name="Bob"/>, document.getElementById('main')
-);
-ReactDOM.render(
-  <CompositionList compositions={ compositionList }/>, document.getElementById('list')
-);
+function composeMapper(comp) {
+    return {
+        state: comp.state,
+        items: comp.compose ? Object.keys(comp.compose) : []
+    };
+}
+
+fetch('/composition')
+    .then((resp) => {
+        return resp.json();
+    })
+    .then((json) => {
+        return Object.entries(json).reduce((r, [k, v]) => {
+            r[k] = composeMapper(v);
+            return r;
+        }, {});
+    })
+    .then((toDisplay) => {
+        ReactDOM.render(
+            <CompositionList compositions={ toDisplay }/>, document.getElementById('list')
+        );
+    });
+
+function displayComposition(composition) {
+
+    var controls = {
+        stopped: ( <span key="stopped"><a href="#" className="pure-button">
+                <i className="fa fa-stop"></i>&nbsp;
+                Stop Service
+            </a>&nbsp;</span> ),
+        started: ( <span key="started"><a href="#" className="pure-button">
+                <i className="fa fa-play"></i>&nbsp;
+                Run Without Respawning
+            </a>&nbsp;</span> ),
+        respawning: ( <span key="respawning"><a href="#" className="pure-button">
+                <i className="fa fa-refresh"></i>&nbsp;
+                Respawn
+            </a>&nbsp;</span> )
+    };
+
+    delete controls[composition.state];
+
+    ReactDOM.render(
+        <span>
+            { Object.values(controls) }
+        </span>,
+        document.getElementById('controls')
+    );
+
+}
+
+let history = createHistory();
+history.listen(location => {
+    let m = location.search.match(/[\?&]composition=([a-z0-9A-Z]+)/);
+    if (!m) { return; }
+    fetch('/composition/' + m[1])
+        .then((resp) => {
+            if (resp.status != 200) {
+                // Not found... handle
+                alert("Could not find composition " + m[1]);
+                return;
+            }
+            resp.json().then(displayComposition);
+        });
+});
+
+// ReactDOM.render(
+//   <Timer name="Bob"/>, document.getElementById('main')
+// );

@@ -160,11 +160,27 @@ setupComposeEnvironmentRoute('compose', writeComposeFile);
 
 server.route({
     method: 'GET',
+    path: '/composition/{composition}',
+    handler: (req, rep) => {
+        boundReadConfig(
+            (err, config) => {
+                console.log(config);
+                if (!config.hasOwnProperty(req.params.composition)) {
+                    return rep(null).code(404);
+                }
+                rep(config[req.params.composition]);
+            }
+        );
+    }
+});
+
+server.route({
+    method: 'GET',
     path: '/composition',
     handler: (req, rep) => {
         boundReadConfig(
             (err, config) => {
-                rep(err, config);
+                rep(config);
             }
         );
     }
