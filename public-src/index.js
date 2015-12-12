@@ -103,8 +103,8 @@ var compositionList = {
 };
 
 function loadComposition(composition) {
-    return function(event) {
-        event.preventDefault();
+    return function(evt) {
+        evt.preventDefault();
         history.push({
             search: '?composition=' + composition
         });
@@ -242,15 +242,22 @@ let refreshComposition = (location) => {
     if (!m) {
         return displayIntroduction();
     }
-    fetch('/composition/' + m[1])
-        .then((resp) => {
+    if (m && !location.state) {
+        return fetch('/composition/' + m[1]).then((resp) => {
             if (resp.status != 200) {
                 // Not found... handle
                 alert("Could not find composition " + m[1]);
                 return;
             }
-            resp.json().then(displayComposition.bind(this, m[1]));
+            resp.json().then((compositionData) => {
+                history.push({
+                    search: location.search,
+                    state: compositionData
+                });
+            });
         });
+    }
+    displayComposition(m[1], location.state);
 };
 
 let history = createHistory();
