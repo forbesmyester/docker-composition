@@ -76,7 +76,7 @@ var Composition = React.createClass({
                 <div className="pure-u-1">
                 <h3>
                     <i className={ state } aria-label={ stateWord }></i>&nbsp;
-                    <a href={ l }>{ name }</a>
+                    <a href={ l } onClick={ loadComposition(name) }>{ name }</a>
                 </h3>
                 <ul>
                     { itemEls }
@@ -101,6 +101,15 @@ var compositionList = {
         items: ["qsmtpd", "imapd"]
     }
 };
+
+function loadComposition(composition) {
+    return function(event) {
+        event.preventDefault();
+        history.push({
+            search: '?composition=' + composition
+        });
+    };
+}
 
 function composeMapper(comp) {
     return {
@@ -231,7 +240,7 @@ function displayFlip(shown) {
 let refreshComposition = (location) => {
     let m = location.search.match(/[\?&]composition=([a-z0-9A-Z]+)/);
     if (!m) {
-        displayIntroduction();
+        return displayIntroduction();
     }
     fetch('/composition/' + m[1])
         .then((resp) => {
