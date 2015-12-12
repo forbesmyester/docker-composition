@@ -30,7 +30,7 @@
 
       border-right: 1px solid #ddd;
     }
-    #main {
+    .main {
       /* Main Layout */
       position: static;
       overflow: auto;
@@ -45,7 +45,7 @@
       padding-left: 1.5em;
       margin 1em 0;
       border-bottom: 1px solid #ddd;
-      cursor: pointer;
+      /* cursor: pointer; */
     }
     #list .composition ul li { list-style-type: none; }
     #list .composition .status { text-align: center; }
@@ -112,8 +112,15 @@
       </div>
       </div>
     </div>
-    <div id="main" class="pure-u-1">
+    <div class="main pure-u-1" id="introduction">
+      <heading id="introduction-heading">
+      <h2>Welcome</h2>
       <heading>
+      <p>A simple UI for managing docker-compose</p>
+    </div>
+
+    <div id="info" class="main pure-u-1" style="display:none">
+      <heading id="info-heading">
       <h2><i class="started fa fa-refresh"></i> Database</h2>
       <dl class="inline">
         <dt>Status</dt>
@@ -123,24 +130,12 @@
       </dl>
       </heading>
       <h3>docker-compose.yaml</h3>
-      <pre><code>bob:
-  image: mongo:3
-  ports:
-    - 27017:27012</code></pre>
+      <pre id="info-compose"></pre>
       <h3>environment.env</h3>
-      <pre><code>DEFAULT_ADMIN_PASSWORD=ky3x
-USE_SMALLFILES=1</code></pre>
+      <pre id="info-environment"></pre>
       <h3>log.tail</h3>
-      <pre><code>m_1 | 2015-12-04T18:22:15.437+0000 I CONTROL  [signalProcessingThread] now exiting
-m_1 | 2015-12-04T18:22:15.437+0000 I NETWORK  [signalProcessingThread] shutdown: going to close listening sockets...
-m_1 | 2015-12-04T18:22:15.437+0000 I NETWORK  [signalProcessingThread] closing listening socket: 5
-m_1 | 2015-12-04T18:22:15.437+0000 I NETWORK  [signalProcessingThread] closing listening socket: 6
-m_1 | 2015-12-04T18:22:15.437+0000 I NETWORK  [signalProcessingThread] removing socket file: /tmp/mongodb-27017.sock
-m_1 | 2015-12-04T18:22:15.437+0000 I NETWORK  [signalProcessingThread] shutdown: going to flush diaglog...
-m_1 | 2015-12-04T18:22:15.437+0000 I NETWORK  [signalProcessingThread] shutdown: going to close sockets...
-m_1 | 2015-12-04T18:22:15.437+0000 I STORAGE  [signalProcessingThread] shutdown: waiting for fs preallocator...
-m_1 | 2015-12-04T18:22:15.437+0000 I STORAGE  [signalProcessingThread] shutdown: final commit...</code></pre>
-      <p id="controls">
+      <pre><code>Coming Soon...</code></pre>
+      <p id="info-controls">
         <a href="#" class="pure-button">
           <i class="fa fa-stop"></i> Stop Service
         </a>

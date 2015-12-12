@@ -3,7 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { values, mapObjIndexed } from 'ramda';
 import { createHistory } from 'history';
-
+import yaml from 'js-yaml';
 
 
 var Timer = React.createClass({
@@ -70,12 +70,13 @@ var Composition = React.createClass({
             return (<li key={ item }>{ item }</li>);
         });
 
+        let l = `/?composition=${name}`;
         return(
             <div className="selected composition pure-g">
                 <div className="pure-u-1">
                 <h3>
                     <i className={ state } aria-label={ stateWord }></i>&nbsp;
-                    { name }
+                    <a href={ l }>{ name }</a>
                 </h3>
                 <ul>
                     { itemEls }
@@ -124,8 +125,7 @@ fetch('/composition')
         );
     });
 
-function displayComposition(composition) {
-
+function getControls(composition) {
     var controls = {
         stopped: ( <span key="stopped"><a href="#" className="pure-button">
                 <i className="fa fa-stop"></i>&nbsp;
@@ -141,21 +141,98 @@ function displayComposition(composition) {
             </a>&nbsp;</span> )
     };
 
-    delete controls[composition.state];
-
-    ReactDOM.render(
+    delete controls[composition.state.replace(/ .*/, '')];
+    return (
         <span>
             { Object.values(controls) }
-        </span>,
-        document.getElementById('controls')
+        </span>
     );
-
 }
 
-let history = createHistory();
-history.listen(location => {
+function getEnvironment(composition) {
+    let t = Object.entries(composition.environment).reduce((acc, [k, v]) => {
+        acc.push(k + '=' + v);
+        return acc;
+    }, []).join("\n");
+    return (<code>{ t }</code>);
+}
+
+function getComposeYaml(composition) {
+    let y = 'ERROR: COULD NOT CREATE YAML...';
+    try {
+        y = yaml.safeDump(composition.compose);
+    } catch (e) {
+        return (<code>{y}</code>);
+    }
+    return (<code>{y}</code>);
+}
+
+function getHeading(name, composition) {
+    let toFa = {
+        stopped: 'stop',
+        respawning: 'refresh',
+        started: 'play'
+    };
+
+    let started = composition.state.indexOf('started') > -1 ? 'started' : '';
+    let headingTitleClass = `${started} fa fa-${ toFa[composition.state] }`;
+
+    return (
+        <heading>
+        <h2><i className={headingTitleClass}></i> { name }</h2>
+        <dl className="inline">
+            <dt>Status</dt>
+            <dd>{ composition.state }</dd>
+        </dl>
+        </heading>
+    );
+}
+
+function displayComposition(name, composition) {
+
+    ReactDOM.render(
+        getHeading(name, composition),
+        document.getElementById('info-heading')
+    );
+
+    ReactDOM.render(
+        getEnvironment(composition),
+        document.getElementById('info-environment')
+    );
+
+    ReactDOM.render(
+        getComposeYaml(composition),
+        document.getElementById('info-compose')
+    );
+
+    ReactDOM.render(
+        getControls(composition),
+        document.getElementById('info-controls')
+    );
+
+    displayFlip('info');
+}
+
+function displayIntroduction() {
+    displayFlip('introduction');
+}
+
+function displayFlip(shown) {
+    document.getElementById('introduction').setAttribute(
+        'style',
+        shown == 'introduction' ? '' : 'display: none'
+    );
+    document.getElementById('info').setAttribute(
+        'style',
+        shown == 'info' ? '' : 'display: none'
+    );
+}
+
+let refreshComposition = (location) => {
     let m = location.search.match(/[\?&]composition=([a-z0-9A-Z]+)/);
-    if (!m) { return; }
+    if (!m) {
+        displayIntroduction();
+    }
     fetch('/composition/' + m[1])
         .then((resp) => {
             if (resp.status != 200) {
@@ -163,10 +240,9 @@ history.listen(location => {
                 alert("Could not find composition " + m[1]);
                 return;
             }
-            resp.json().then(displayComposition);
+            resp.json().then(displayComposition.bind(this, m[1]));
         });
-});
+};
 
-// ReactDOM.render(
-//   <Timer name="Bob"/>, document.getElementById('main')
-// );
+let history = createHistory();
+history.listen(refreshComposition);
