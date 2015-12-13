@@ -160,22 +160,6 @@ setupComposeEnvironmentRoute('compose', writeComposeFile);
 
 server.route({
     method: 'GET',
-    path: '/composition/{composition}',
-    handler: (req, rep) => {
-        boundReadConfig(
-            (err, config) => {
-                console.log(config);
-                if (!config.hasOwnProperty(req.params.composition)) {
-                    return rep(null).code(404);
-                }
-                rep(config[req.params.composition]);
-            }
-        );
-    }
-});
-
-server.route({
-    method: 'GET',
     path: '/composition',
     handler: (req, rep) => {
         boundReadConfig(
@@ -188,6 +172,7 @@ server.route({
 
 function getStartStopRespawnErrorFunc(done) {
     return function(err, code, message) {
+        console.log(err);
         let httpStatus = 500;
         if (code == "INVALID_COMPOSITION_CONFIGURATION") {
             httpStatus = 409;
