@@ -87,7 +87,6 @@ var compositionList = {
 
 function loadComposition(composition) {
     return function(evt) {
-        console.log("loadComposition");
         evt.preventDefault();
         history.push('/?composition=' + composition);
     };
@@ -100,21 +99,47 @@ function composeMapper(comp) {
     };
 }
 
+function setCompositionState(name, state) {
+    return function setCompositionStateImpl(evt) {
+        evt.preventDefault();
+        fetch(`/composition/${name}/state`, {
+            method: 'PUT',
+            body: '"' + state + '"',
+            headers: new Headers({ 'Content-Type': 'application/json' })
+        });
+    };
+}
 
-function getControls(composition) {
+
+function getControls(name, composition) {
     var controls = {
-        stopped: ( <span key="stopped"><a href="#" className="pure-button">
+        stopped: (
+            <span key="stopped">
+            <a href="#"
+                    onClick={ setCompositionState(name, 'stopped') }
+                    className="pure-button">
                 <i className="fa fa-stop"></i>&nbsp;
                 Stop Service
-            </a>&nbsp;</span> ),
-        started: ( <span key="started"><a href="#" className="pure-button">
+            </a>&nbsp;
+            </span> ),
+        started: (
+            <span key="started">
+            <a href="#"
+                    onClick={ setCompositionState(name, 'started') }
+                    className="pure-button">
                 <i className="fa fa-play"></i>&nbsp;
-                Run Without Respawning
-            </a>&nbsp;</span> ),
-        respawning: ( <span key="respawning"><a href="#" className="pure-button">
+                Start Service
+            </a>&nbsp;
+            </span> ),
+        respawning: (
+            <span key="respawning">
+            <a href="#"
+                    onClick={ setCompositionState(name, 'respawning') }
+                    className="pure-button">
                 <i className="fa fa-refresh"></i>&nbsp;
-                Respawn
-            </a>&nbsp;</span> )
+                Respawn Service
+            </a>&nbsp;
+            </span> )
     };
 
     delete controls[composition.state.replace(/ .*/, '')];
@@ -151,7 +176,7 @@ function getHeading(name, composition) {
     };
 
     let started = composition.state.indexOf('started') > -1 ? 'started' : '';
-    let headingTitleClass = `${started} fa fa-${ toFa[composition.state] }`;
+    let headingTitleClass = `${started} fa fa-${ toFa[composition.state.replace(/ .*/, '')] }`;
 
     return (
         <heading>
@@ -182,7 +207,7 @@ function displayComposition(name, composition) {
     );
 
     ReactDOM.render(
-        getControls(composition),
+        getControls(name, composition),
         document.getElementById('info-controls')
     );
 
@@ -224,7 +249,6 @@ function refreshState() {
             return resp.json();
         })
         .then((compositionData) => {
-            console.log("REFRESHSTATE");
             currentStatus = compositionData;
             history.push({ search: location.search });
             return compositionData;
@@ -246,7 +270,6 @@ function displayList(compositionData) {
 let history = createHistory();
 refreshState().then(() => {
     history.listen((location) => {
-        console.log("STATE: ", currentStatus);
         displayList(currentStatus);
         refreshMain(location, currentStatus);
     });
