@@ -5,24 +5,7 @@ import { values, mapObjIndexed } from 'ramda';
 import { createHistory } from 'history';
 import yaml from 'js-yaml';
 
-
-var Timer = React.createClass({
-    getInitialState: function() {
-        return {a: 1};
-    },
-    tick: function() {
-        this.setState({a: this.state.a + 1});
-    },
-    componentDidMount: function() {
-        this.interval = setInterval(this.tick, 1000);
-    },
-    componentWillUnmount: function() {
-        clearInterval(this.tick);
-    },
-    render: function() {
-        return (<h1>Hello, { this.props.name } { this.state.a }!</h1>);
-    }
-});
+var currentStatus = {};
 
 var CompositionList = React.createClass({
     render: function() {
@@ -104,10 +87,9 @@ var compositionList = {
 
 function loadComposition(composition) {
     return function(evt) {
+        console.log("loadComposition");
         evt.preventDefault();
-        history.push({
-            search: '?composition=' + composition
-        });
+        history.push('/?composition=' + composition);
     };
 }
 
@@ -118,21 +100,6 @@ function composeMapper(comp) {
     };
 }
 
-fetch('/composition')
-    .then((resp) => {
-        return resp.json();
-    })
-    .then((json) => {
-        return Object.entries(json).reduce((r, [k, v]) => {
-            r[k] = composeMapper(v);
-            return r;
-        }, {});
-    })
-    .then((toDisplay) => {
-        ReactDOM.render(
-            <CompositionList compositions={ toDisplay }/>, document.getElementById('list')
-        );
-    });
 
 function getControls(composition) {
     var controls = {
@@ -237,28 +204,50 @@ function displayFlip(shown) {
     );
 }
 
-let refreshComposition = (location) => {
+let refreshMain = (location, myCurrentStatus) => {
     let m = location.search.match(/[\?&]composition=([a-z0-9A-Z]+)/);
     if (!m) {
         return displayIntroduction();
     }
-    if (m && !location.state) {
-        return fetch('/composition/' + m[1]).then((resp) => {
-            if (resp.status != 200) {
-                // Not found... handle
-                alert("Could not find composition " + m[1]);
-                return;
-            }
-            resp.json().then((compositionData) => {
-                history.push({
-                    search: location.search,
-                    state: compositionData
-                });
-            });
-        });
+    let comp = m[1];
+    if (!myCurrentStatus[comp]) {
+        // Not found... handle
+        alert("Could not find composition " + comp);
+        return;
     }
-    displayComposition(m[1], location.state);
+    displayComposition(comp, myCurrentStatus[comp]);
 };
 
+function refreshState() {
+    return fetch('/composition')
+        .then((resp) => {
+            return resp.json();
+        })
+        .then((compositionData) => {
+            console.log("REFRESHSTATE");
+            currentStatus = compositionData;
+            history.push({ search: location.search });
+            return compositionData;
+        });
+}
+
+
+function displayList(compositionData) {
+    let toDisplay = Object.entries(compositionData).reduce((r, [k, v]) => {
+        r[k] = composeMapper(v);
+        return r;
+    }, {});
+    ReactDOM.render(
+        <CompositionList compositions={ toDisplay }/>, document.getElementById('list')
+    );
+}
+
+
 let history = createHistory();
-history.listen(refreshComposition);
+refreshState().then(() => {
+    history.listen((location) => {
+        console.log("STATE: ", currentStatus);
+        displayList(currentStatus);
+        refreshMain(location, currentStatus);
+    });
+});
