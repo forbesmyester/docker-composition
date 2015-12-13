@@ -1,7 +1,7 @@
 import async from 'async';
 import yaml from 'js-yaml';
 import path from 'path';
-import { flatten, uniq, map, pipe, concat, defaultTo, values, nth, split, join, tail, merge, mapObjIndexed, zip, assocPath, reduce } from 'ramda';
+import { filter, flatten, uniq, map, pipe, concat, defaultTo, values, nth, split, join, tail, merge, mapObjIndexed, zip, assocPath, reduce } from 'ramda';
 
 export class Ports {
     constructor() {
@@ -67,7 +67,7 @@ export function writeComposeFile(genRand, writeFile, moveFile, directory, compos
 
 }
 
-export function writeEnvironmentFile(genRand, writeFile, moveFile, directory, composition, data, next) {
+export function writeEnvironmentFile(genRand, writeFile, moveFile, directory, composition, service, data, next) {
 
     let mapper = function(ob) {
         return join("\n", values(mapObjIndexed((v, k) => {
@@ -80,7 +80,7 @@ export function writeEnvironmentFile(genRand, writeFile, moveFile, directory, co
         writeFile,
         moveFile,
         mapper,
-        'environment.env',
+        `${service}.env`,
         directory,
         composition,
         data,
@@ -116,17 +116,45 @@ function processFile(readFileF, filename, next) {
 }
 
 function reduceConfig(filesDataList) {
-    let reducer = (acc, [filename, data]) => {
-        return assocPath(
-            [
-                filename.replace(/\/.*/, ''),
-                filename.replace(/.*\//, '').replace(/\.[^\.]+/, '')
-            ],
-            data,
-            acc
-        );
-    };
-    return reduce(reducer, {}, filesDataList);
+
+    let isComposeFile = ([filename]) => {
+            return !!filename.match(/\/compose\.ya?ml$/);
+        },
+        composeData = pipe(
+                filter(isComposeFile),
+                reduce((acc, [filename, data]) => {
+                    let m = filename.match(/([^\/]+)\/([^\/]+)\.ya?ml/);
+                    if (!m) { return acc; }
+                    return assocPath([m[1], 'compose'], data, acc);
+                }, {})
+            )(filesDataList),
+        validEnvironmentFiles = pipe(
+                filter(isComposeFile),
+                map(
+                    ([filename, data]) => {
+                        return [
+                            filename.replace(/\/[^\/]+/, ''),
+                            Object.getOwnPropertyNames(data)
+                        ];
+                    }
+                ),
+                map(([name, keys]) => {
+                    return keys.map((key) => name + "/" + key + '.env');
+                }),
+                flatten
+            )(filesDataList);
+
+    return pipe(
+            filter(([filename]) => {
+                return validEnvironmentFiles.indexOf(filename) > -1;
+            }),
+            reduce((acc, [filename, data]) => {
+                let m = filename.match(/([^\/]+)\/([^\/]+)\.env$/);
+                if (!m) { return acc; }
+                return assocPath([m[1], 'environment', m[2]], data, acc);
+            }, composeData)
+        )(filesDataList);
+
 }
 
 function mixinStarted(getStateF, readConfigReturn) {
@@ -189,7 +217,7 @@ export function validateConfig(readdirF, directory, configKey, next) {
         if (err) { return next(null, false); }
         next(
             null,
-            (files.indexOf('compose.yaml') > -1) && (files.indexOf('environment.env') > -1)
+            (files.indexOf('compose.yaml') > -1)
         );
     });
 }
@@ -206,7 +234,10 @@ export function readConfig(readdirF, readFileF, getStateF, directory, next) {
             ),
             function(err2, datas) {
                 if (err2) { return next(err2); }
-                next(null, mixinStarted(getStateF, reduceConfig(zip(files, datas))));
+                next(
+                    null,
+                    mixinStarted(getStateF, reduceConfig(zip(files, datas)))
+                );
             }
         );
     });

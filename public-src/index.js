@@ -106,6 +106,10 @@ function setCompositionState(name, state) {
             method: 'PUT',
             body: '"' + state + '"',
             headers: new Headers({ 'Content-Type': 'application/json' })
+        }).then((resp) => {
+            if (resp.status == 409) {
+                alert("Conflict Detected (check ports)");
+            }
         });
     };
 }
@@ -151,6 +155,9 @@ function getControls(name, composition) {
 }
 
 function getEnvironment(composition) {
+    if (!composition.environment) {
+        return (<code></code>);
+    }
     let t = Object.entries(composition.environment).reduce((acc, [k, v]) => {
         acc.push(k + '=' + v);
         return acc;

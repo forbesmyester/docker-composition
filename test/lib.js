@@ -67,7 +67,7 @@ describe('atomically write config files for', function() {
             { mode: 0o600, encoding: 'utf8' }
         );
 
-        let moveFile = checkerNext('/tmp/.aaa', '/tmp/a/environment.env');
+        let moveFile = checkerNext('/tmp/.aaa', '/tmp/a/abc.env');
 
         writeEnvironmentFile(
             genRand,
@@ -75,6 +75,7 @@ describe('atomically write config files for', function() {
             moveFile,
             '/tmp',
             'a',
+            'abc',
             { NODE_ENV: 'production' },
             (err) => {
                 expect(err).to.eql(null);
@@ -88,7 +89,7 @@ describe('validateConfig', function() {
     it('can validate (success)', function(done) {
         let rd = (p, n) => {
             expect(p).to.eql('test-data/m');
-            n(null, ['compose.yaml', 'environment.env']);
+            n(null, ['compose.yaml', 'aaa.env']);
         };
         validateConfig(rd, './test-data', 'm', function(err, valid) {
             expect(err).to.eql(null);
@@ -107,17 +108,6 @@ describe('validateConfig', function() {
             done();
         });
     });
-    it('can validate (missing env)', function(done) {
-        let rd = (p, n) => {
-            expect(p).to.eql('test-data/m');
-            n(null, ['compose.yaml']);
-        };
-        validateConfig(rd, './test-data', 'm', function(err, valid) {
-            expect(err).to.eql(null);
-            expect(valid).to.eql(false);
-            done();
-        });
-    });
 });
 
 describe('readConfig', function() {
@@ -129,8 +119,7 @@ describe('readConfig', function() {
                 {
                     "a": {
                         "state": "started",
-                        "compose": {"person": {"name": "bob"}},
-                        "environment": {"NODE_ENV": "production"}
+                        "compose": {"person": {"name": "bob"}}
                     },
                     "b":{
                         "state": "stopped",
@@ -144,7 +133,9 @@ describe('readConfig', function() {
                                 "ports": ["3900:2900"]
                             }
                         },
-                        "environment": {"KEY1": "abc=def", "KEY2": "def"}
+                        "environment": {
+                            "def": { "KEY1": "abc=def", "KEY2": "def"} 
+                        }
                     }
                 }
             );
